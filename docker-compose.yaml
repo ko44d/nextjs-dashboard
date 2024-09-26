@@ -1,0 +1,9 @@
+services:
+  nextjs-dashboard-db:
+    image: postgres:latest
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: nextjs
+      POSTGRES_PASSWORD: nextjs
+      POSTGRES_DB: nextjs
