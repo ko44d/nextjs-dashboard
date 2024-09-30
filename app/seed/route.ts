@@ -1,6 +1,23 @@
-// import bcrypt from 'bcrypt';
+import bcrypt from 'bcrypt';
 // import { db } from '@vercel/postgres';
-// import { invoices, customers, revenue, users } from '../lib/placeholder-data';
+import { invoices, customers, revenue, users } from '../lib/placeholder-data';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient()
+
+async function seedUsers() {
+    await Promise.all(users.map(async (user) => {
+        const hashedPassword = await bcrypt.hash(user.password, 10)
+        return prisma.user.create({
+            data: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                password: hashedPassword,
+            },
+        },);
+    }));
+}
 
 // const client = await db.connect();
 
@@ -102,10 +119,12 @@
 // }
 
 export async function GET() {
-  return Response.json({
+    seedUsers();
+    return Response.json({
     message:
       'Uncomment this file and remove this line. You can delete this file when you are finished.',
   });
+
   // try {
   //   await client.sql`BEGIN`;
   //   await seedUsers();
