@@ -33,14 +33,49 @@ export async function fetchRevenue() {
 
 export async function fetchLatestInvoices() {
   try {
-    const data = await sql<LatestInvoiceRaw>`
-      SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
-      ORDER BY invoices.date DESC
-      LIMIT 5`;
+    const invoices = await prisma.invoice.findMany({
+      select: {
+        id: true,
+        amount: true,
+        status: true,
+        date: true,
+        customerId: true,
+      },
+      orderBy: {
+        date: 'desc',
+      },
+      take: 5,
+    });
 
-    const latestInvoices = data.rows.map((invoice) => ({
+    const customerIds = invoices.map(invoice => invoice.customerId);
+
+    const customers = await prisma.customer.findMany({
+      where: {
+        id: {
+          in: customerIds,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        imageUrl: true,
+      },
+    });
+
+    const data = invoices.map(invoice => {
+      const customer = customers.find(cust => cust.id === invoice.customerId);
+
+      return {
+        id: invoice.id,
+        name: customer?.name || '',
+        image_url: customer?.imageUrl || '',
+        email: customer?.email || '',
+        amount: invoice.amount,
+      };
+    });
+
+    const latestInvoices = data.map((invoice) => ({
       ...invoice,
       amount: formatCurrency(invoice.amount),
     }));
