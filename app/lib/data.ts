@@ -9,6 +9,7 @@ import {
 } from './definitions';
 import { formatCurrency } from './utils';
 import { PrismaClient } from '@prisma/client';
+import {Prisma} from "@prisma/client/extension";
 
 const prisma = new PrismaClient()
 
@@ -156,28 +157,56 @@ export async function fetchFilteredInvoices(
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
   try {
-    const invoices = await sql<InvoicesTable>`
-      SELECT
-        invoices.id,
-        invoices.amount,
-        invoices.date,
-        invoices.status,
-        customers.name,
-        customers.email,
-        customers.image_url
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
-      WHERE
-        customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`} OR
-        invoices.amount::text ILIKE ${`%${query}%`} OR
-        invoices.date::text ILIKE ${`%${query}%`} OR
-        invoices.status ILIKE ${`%${query}%`}
-      ORDER BY invoices.date DESC
-      LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
-    `;
+    const invoices = await prisma.invoice.findMany({
+      where: {
+        OR: [
+          { status: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: {
+        date: 'desc',
+      },
+      take: ITEMS_PER_PAGE,
+      skip: offset,
+    });
 
-    return invoices.rows;
+    const customerIds = invoices.map((invoice) => invoice.customerId);
+    const customers = await prisma.customer.findMany({
+    where: {
+      id: {
+        in: customerIds, // 該当のcustomer_idにマッチする顧客を取得
+      },
+      OR: [
+        {
+          name: {
+            contains: query,
+            mode: 'insensitive',
+          },
+        },
+        {
+          email: {
+            contains: query,
+            mode: 'insensitive',
+          },
+        },
+      ],
+    },
+  });
+
+  const result = invoices.map((invoice) => {
+    const customer = customers.find((cust) => cust.id === invoice.customerId);
+    return {
+      id: invoice.id,
+      amount: invoice.amount,
+      date: invoice.date,
+      status: invoice.status,
+      name: customer?.name || 'Unknown',
+      email: customer?.email || 'Unknown',
+      image_url: customer?.imageUrl || '',
+    };
+  });
+
+    return result;
   } catch (error) {
     console.error('Database Error:', error);
     throw new Error('Failed to fetch invoices.');
