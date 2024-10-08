@@ -34,52 +34,18 @@ export async function fetchRevenue() {
 
 export async function fetchLatestInvoices() {
   try {
-    const invoices = await prisma.invoice.findMany({
-      select: {
-        id: true,
-        amount: true,
-        status: true,
-        date: true,
-        customerId: true,
-      },
-      orderBy: {
-        date: 'desc',
-      },
-      take: 5,
-    });
 
-    const customerIds = invoices.map(invoice => invoice.customerId);
-
-    const customers = await prisma.customer.findMany({
-      where: {
-        id: {
-          in: customerIds,
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        imageUrl: true,
-      },
-    });
-
-    const data = invoices.map(invoice => {
-      const customer = customers.find(cust => cust.id === invoice.customerId);
-
-      return {
-        id: invoice.id,
-        name: customer?.name || '',
-        image_url: customer?.imageUrl || '',
-        email: customer?.email || '',
-        amount: invoice.amount,
-      };
-    });
+    const data : any[] = await prisma.$queryRaw`
+                     SELECT "Invoice".amount, "Customer".name, "Customer"."imageUrl", "Customer".email, "Invoice".id
+                     FROM "Invoice"
+                     JOIN "Customer" ON "Invoice"."customerId" = "Customer".id
+                     ORDER BY "Invoice".date DESC LIMIT 5`;
 
     const latestInvoices = data.map((invoice) => ({
       ...invoice,
       amount: formatCurrency(invoice.amount),
     }));
+
     return latestInvoices;
   } catch (error) {
     console.error('Database Error:', error);
