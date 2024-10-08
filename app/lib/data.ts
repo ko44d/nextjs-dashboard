@@ -157,54 +157,26 @@ export async function fetchFilteredInvoices(
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
   try {
-    const invoices = await prisma.invoice.findMany({
-      where: {
-        OR: [
-          { status: { contains: query, mode: 'insensitive' } },
-        ],
-      },
-      orderBy: {
-        date: 'desc',
-      },
-      take: ITEMS_PER_PAGE,
-      skip: offset,
-    });
-
-    const customerIds = invoices.map((invoice) => invoice.customerId);
-    const customers = await prisma.customer.findMany({
-    where: {
-      id: {
-        in: customerIds, // 該当のcustomer_idにマッチする顧客を取得
-      },
-      OR: [
-        {
-          name: {
-            contains: query,
-            mode: 'insensitive',
-          },
-        },
-        {
-          email: {
-            contains: query,
-            mode: 'insensitive',
-          },
-        },
-      ],
-    },
-  });
-
-  const result = invoices.map((invoice) => {
-    const customer = customers.find((cust) => cust.id === invoice.customerId);
-    return {
-      id: invoice.id,
-      amount: invoice.amount,
-      date: invoice.date,
-      status: invoice.status,
-      name: customer?.name || 'Unknown',
-      email: customer?.email || 'Unknown',
-      image_url: customer?.imageUrl || '',
-    };
-  });
+    const result = await prisma.$queryRaw`
+      SELECT
+        "Invoice".id,
+        "Invoice".amount,
+        "Invoice".date,
+        "Invoice".status,
+        "Customer".name,
+        "Customer".email,
+        "Customer"."imageUrl"
+      FROM "Invoice"
+      JOIN "Customer" ON "Invoice"."customerId" = "Customer".id
+      WHERE
+        "Customer".name ILIKE ${`%${query}%`} OR
+        "Customer".email ILIKE ${`%${query}%`} OR
+        "Invoice".amount::text ILIKE ${`%${query}%`} OR
+        "Invoice".date::text ILIKE ${`%${query}%`} OR
+        "Invoice".status ILIKE ${`%${query}%`}
+      ORDER BY "Invoice".date DESC
+      LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
+    `;
 
     return result;
   } catch (error) {
